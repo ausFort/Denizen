@@ -37,11 +37,11 @@ public class ItemBook implements Property {
     }
 
     public static final String[] handledTags = new String[] {
-            "book", "book_author", "book_title", "book_pages", "book_map"
+            "book", "book_author", "book_title", "book_pages", "book_map", "book_generation"
     };
 
     public static final String[] handledMechs = new String[] {
-            "book", "book_raw_pages", "book_pages", "book_author", "book_title"
+            "book", "book_raw_pages", "book_pages", "book_author", "book_title", "book_generation"
     };
 
     private ItemBook(ItemTag _item) {
@@ -70,8 +70,7 @@ public class ItemBook implements Property {
         // Returns the author of the book.
         // -->
         if (attribute.startsWith("book_author") && item.getItemStack().getType() == Material.WRITTEN_BOOK) {
-            return new ElementTag(getBookInfo().getAuthor())
-                    .getObjectAttribute(attribute.fulfill(1));
+            return new ElementTag(getBookInfo().getAuthor()).getObjectAttribute(attribute.fulfill(1));
         }
 
         // <--[tag]
@@ -83,8 +82,19 @@ public class ItemBook implements Property {
         // Returns the title of the book.
         // -->
         if (attribute.startsWith("book_title") && item.getItemStack().getType() == Material.WRITTEN_BOOK) {
-            return new ElementTag(getBookInfo().getTitle())
-                    .getObjectAttribute(attribute.fulfill(1));
+            return new ElementTag(getBookInfo().getTitle()).getObjectAttribute(attribute.fulfill(1));
+        }
+
+        // <--[tag]
+        // @attribute <ItemTag.book_generation>
+        // @returns ListTag
+        // @mechanism ItemTag.book_generation
+        // @group properties
+        // @description
+        // Returns the generation of the book.
+        // -->
+        if (attribute.startsWith("book_generation") && item.getItemStack().getType() == Material.WRITTEN_BOOK) {
+            return new ElementTag(getBookInfo().getGeneration().toString()).getObjectAttribute(attribute.fulfill(1));
         }
 
         // <--[tag]
@@ -181,6 +191,7 @@ public class ItemBook implements Property {
         if (item.getItemStack().getType().equals(Material.WRITTEN_BOOK) && bookInfo.hasAuthor() && bookInfo.hasTitle()) {
             outMap.putObject("author", new ElementTag(bookInfo.getAuthor()));
             outMap.putObject("title", new ElementTag(bookInfo.getTitle()));
+            outMap.putObject("generation", new ElementTag(bookInfo.getGeneration().toString()));
         }
         if (bookInfo.hasPages()) {
             List<BaseComponent[]> pages = bookInfo.spigot().getPages();
@@ -236,7 +247,7 @@ public class ItemBook implements Property {
         // @input ListTag
         // @description
         // Changes the plain-text pages of a book item.
-        // See <@link language Escape Tags>.
+        // See <@link language Property Escaping>
         // @tags
         // <ItemTag.book_pages>
         // -->
@@ -293,11 +304,38 @@ public class ItemBook implements Property {
 
         // <--[mechanism]
         // @object ItemTag
+        // @name book_generation
+        // @input ElementTag
+        // @description
+        // Changes the generation of a book item.
+        // <@link url https://hub.spigotmc.org/javadocs/spigot/org/bukkit/inventory/meta/BookMeta.Generation.html>
+        // @tags
+        // <ItemTag.book_generation>
+        // -->
+        if (mechanism.matches("book_generation")) {
+            if (!item.getItemStack().getType().equals(Material.WRITTEN_BOOK)) {
+                Debug.echoError("Only WRITTEN_BOOK (not WRITABLE_BOOK) can have a generation!");
+            }
+            else {
+                BookMeta meta = (BookMeta) item.getItemMeta();
+                try {
+                    BookMeta.Generation gen = BookMeta.Generation.valueOf(mechanism.getValue().asString());
+                    meta.setGeneration(gen);
+                    item.setItemMeta(meta);
+                }
+                catch (IllegalArgumentException e) {
+                    Debug.echoError("Invalid generation specified: " + mechanism.getValue());
+                }
+            }
+        }
+
+        // <--[mechanism]
+        // @object ItemTag
         // @name book
         // @input MapTag
         // @description
         // Changes the information on a book item.
-        // Should have keys "pages" (a ListTag), and optionally "title" and "author".
+        // Should have keys "pages" (a ListTag), and optionally "title" and "author", and optionally "generation".
         // @tags
         // <ItemTag.is_book>
         // <ItemTag.book_title>
@@ -327,6 +365,16 @@ public class ItemBook implements Property {
                         newPages.add(FormattedTextHelper.parse(pageList.get(i)));
                     }
                     meta.spigot().setPages(newPages);
+                }
+                ObjectTag generation = mapData.getObject("generation");
+                if (generation != null) {
+                    try {
+                        BookMeta.Generation gen = BookMeta.Generation.valueOf(generation.asType(ElementTag.class, mechanism.context).asString());
+                        meta.setGeneration(gen);
+                    }
+                    catch (IllegalArgumentException e) {
+                        Debug.echoError("Invalid generation specified: " + generation.toString());
+                    }
                 }
                 item.setItemMeta(meta);
                 return;
